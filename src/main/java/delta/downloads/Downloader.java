@@ -50,6 +50,7 @@ public class Downloader
     try
     {
       get.setFollowRedirects(true);
+      get.getParams().setHttpElementCharset("UTF-8");
       int iGetResultCode=_client.executeMethod(get);
       if (_logger.isInfoEnabled())
       {
