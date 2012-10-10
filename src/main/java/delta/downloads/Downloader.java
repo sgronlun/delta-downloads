@@ -14,57 +14,102 @@ import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.log4j.Logger;
 
 import delta.common.utils.files.FileCopy;
+import delta.common.utils.text.EncodingNames;
 import delta.downloads.utils.DownloadsLoggers;
 
+/**
+ * A download service.
+ * @author DAM
+ */
 public class Downloader
 {
   private static final Logger _logger=DownloadsLoggers.getDownloadsLogger();
 
+  // Underlying service
   private HttpClient _client;
-  private long _files;
+  // Configuration
+  private boolean _followsRedirects;
+  private String _charset;
+  private boolean _storeCookies;
+  // Statistics
+  private long _downloads;
   private long _bytes;
+  // Session information
   private HashMap<String,String> _cookies;
 
+  /**
+   * Constructor.
+   */
   public Downloader()
   {
     _client=new HttpClient(new MultiThreadedHttpConnectionManager());
     _client.getHttpConnectionManager().getParams().setConnectionTimeout(30000);
-    _files=0;
+    _followsRedirects=true;
+    _charset=EncodingNames.UTF_8;
+    _storeCookies=false;
+    _downloads=0;
     _bytes=0;
     _cookies=new HashMap<String,String>();
   }
 
-  public HttpClient getHttpClient()
+  /**
+   * Set the 'follow redirects' behavior.
+   * @param followsRedirects <code>true</code> to follow redirect responses, <code>false</code> otherwise.
+   */
+  public void setFollowsRedirects(boolean followsRedirects)
   {
-    return _client;
+    _followsRedirects=followsRedirects;
   }
 
-  public boolean downloadPage(String url, File to)
+  /**
+   * Set the charset to use.
+   * @param charset A charset identifier.
+   */
+  public void setCharset(String charset)
+  {
+    _charset=charset;
+  }
+
+  /**
+   * Set the value of the 'store cookies' flag.
+   * @param storeCookies Flag value to set.
+   */
+  public void setStoreCookies(boolean storeCookies)
+  {
+    _storeCookies=storeCookies;
+  }
+
+  private interface ResultGetter<T>
+  {
+    public T getResult(GetMethod method) throws Exception;
+  }
+
+  private synchronized <T> T privateDowload(String url, ResultGetter<T> getter) throws DownloadException
   {
     if (_logger.isInfoEnabled())
     {
-      _logger.info("Downloading URL ["+url+"] to file ["+to+"]");
+      _logger.info("Downloading from URL ["+url+"].");
     }
-    boolean ret=false;
+    T ret=null;
     GetMethod get=new GetMethod(url);
     try
     {
-      get.setFollowRedirects(true);
-      get.getParams().setHttpElementCharset("UTF-8");
+      get.setFollowRedirects(_followsRedirects);
+      get.getParams().setHttpElementCharset(_charset);
       int iGetResultCode=_client.executeMethod(get);
       if (_logger.isInfoEnabled())
       {
         _logger.info("Status code : "+iGetResultCode);
       }
-      InputStream is=get.getResponseBodyAsStream();
-      ret=FileCopy.copy(is,to);
-      _bytes+=to.length();
-      _files++;
-      catchCookies(get);
+      ret=getter.getResult(get);
+      if (_storeCookies)
+      {
+        catchCookies(get);
+      }
     }
     catch (Exception e)
     {
-      e.printStackTrace();
+      throw new DownloadException("Download error for ["+url+"]!",e);
     }
     finally
     {
@@ -73,6 +118,115 @@ public class Downloader
     return ret;
   }
 
+  private void updateStatistics(long length, long downloads)
+  {
+    _bytes+=length;
+    _downloads+=downloads;
+  }
+
+  /**
+   * Download an URL as a byte buffer.
+   * @param url Source URL.
+   * @return A byte buffer or <code>null</code>.
+   * @throws DownloadException
+   */
+  public byte[] downloadBuffer(String url) throws DownloadException
+  {
+    ResultGetter<byte[]> getter=new ResultGetter<byte[]>()
+    {
+      public byte[] getResult(GetMethod method) throws Exception
+      {
+        byte[] ret=method.getResponseBody();
+        if (ret!=null)
+        {
+          updateStatistics(ret.length,1);
+        }
+        return ret;
+      }
+    };
+    byte[] ret=privateDowload(url,getter);
+    return ret;
+  }
+
+  /**
+   * Download an URL as a string.
+   * @param url Source URL.
+   * @return A string or <code>null</code>.
+   * @throws DownloadException
+   */
+  public String downloadString(String url) throws DownloadException
+  {
+    ResultGetter<String> getter=new ResultGetter<String>()
+    {
+      public String getResult(GetMethod method) throws Exception
+      {
+        String ret=method.getResponseBodyAsString();
+        if (ret!=null)
+        {
+          long length=method.getResponseContentLength();
+          updateStatistics(length,1);
+        }
+        return ret;
+      }
+    };
+    String ret=privateDowload(url,getter);
+    return ret;
+  }
+
+  /**
+   * Download an URL into a file.
+   * @param url Source URL.
+   * @param to Target file.
+   * @return <code>true</code> if file was successfully written, <code>false</code> otherwise.
+   * @throws DownloadException
+   */
+  public boolean downloadToFile(String url, final File to) throws DownloadException
+  {
+    ResultGetter<Boolean> getter=new ResultGetter<Boolean>()
+    {
+      public Boolean getResult(GetMethod method) throws Exception
+      {
+        InputStream is=method.getResponseBodyAsStream();
+        boolean ok=FileCopy.copy(is,to);
+        if (ok)
+        {
+          updateStatistics(to.length(),1);
+        }
+        return Boolean.valueOf(ok);
+      }
+    };
+    Boolean ret=privateDowload(url,getter);
+    return ret.booleanValue();
+  }
+
+  /**
+   * Download an URL into a file.
+   * @param url Source URL.
+   * @param to Target file.
+   * @return <code>true</code> if file was successfully written, <code>false</code> otherwise.
+   * @deprecated Use downloadToFile instead.
+   */
+  public boolean downloadPage(String url, File to)
+  {
+    boolean ret=false;
+    try
+    {
+      ret=downloadToFile(url,to);
+    }
+    catch(DownloadException e)
+    {
+      _logger.error("Download error",e);
+    }
+    return ret;
+  }
+
+  /**
+   * Download a page to a file using the POST method.
+   * @param url Source URL.
+   * @param to Target file.
+   * @param parameters Parameters to post.
+   * @return <code>true</code> if file was successfully written, <code>false</code> otherwise.
+   */
   public boolean downloadPageAsPost(String url, File to, Map<String,String> parameters)
   {
     if (_logger.isInfoEnabled())
@@ -96,7 +250,7 @@ public class Downloader
       InputStream is=post.getResponseBodyAsStream();
       ret=FileCopy.copy(is,to);
       _bytes+=to.length();
-      _files++;
+      _downloads++;
       catchCookies(post);
     }
     catch (Exception e)
@@ -138,18 +292,31 @@ public class Downloader
     }
   }
 
+  /**
+   * Get the value of a cookie.
+   * @param cookieName Name of the cookie to get.
+   * @return A cookie value or <code>null</code> if not found.
+   */
   public String getCookieValue(String cookieName)
   {
     return _cookies.get(cookieName);
   }
 
-  public void status()
+  /**
+   * Get statistics.
+   * @return a statistics string.
+   */
+  public String getStatistics()
   {
-    System.out.println("Downloaded "+_files+" file(s) - "+((float)_bytes)/(1024*1024)+"Mo");
+    return "Downloaded "+_downloads+" item(s) - "+((float)_bytes)/(1024*1024)+"Mo";
   }
 
-  public void stop()
+  /**
+   * Dispose all managed resources.
+   */
+  public void dispose()
   {
-    status();
+    _client=null;
+    _cookies.clear();
   }
 }
