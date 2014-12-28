@@ -53,6 +53,15 @@ public class Downloader
   }
 
   /**
+   * Get the cookies map.
+   * @return a map.
+   */
+  public Map<String,String> getCookies()
+  {
+    return _cookies;
+  }
+
+  /**
    * Set the 'follow redirects' behavior.
    * @param followsRedirects <code>true</code> to follow redirect responses, <code>false</code> otherwise.
    */
