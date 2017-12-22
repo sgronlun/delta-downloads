@@ -8,12 +8,18 @@ import org.apache.log4j.Logger;
 import delta.downloads.utils.DownloadsLoggers;
 
 /**
+ * Finds relocations.
  * @author DAM
  */
 public class RelocationFinder
 {
   private static final Logger _logger=DownloadsLoggers.getDownloadsLogger();
 
+  /**
+   * Finds relocation for the given URL, if any.
+   * @param urlStr URL to use.
+   * @return An URL or <code>null</code> if no relocation.
+   */
   public String getRelocation(String urlStr)
   {
     String loc=null;
@@ -51,6 +57,10 @@ public class RelocationFinder
     return loc;
   }
 
+  /**
+   * Main method for this tool.
+   * @param args Not used.
+   */
   public static void main(String[] args)
   {
     RelocationFinder finder=new RelocationFinder();
