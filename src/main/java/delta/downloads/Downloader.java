@@ -1,20 +1,32 @@
 package delta.downloads;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpMethodBase;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.methods.GetMethod;
-import org.apache.commons.httpclient.methods.PostMethod;
+import org.apache.http.Consts;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.ssl.SSLContexts;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
 import delta.common.utils.files.FileCopy;
-import delta.common.utils.text.EncodingNames;
 import delta.downloads.utils.DownloadsLoggers;
 
 /**
@@ -26,10 +38,10 @@ public class Downloader
   private static final Logger _logger=DownloadsLoggers.getDownloadsLogger();
 
   // Underlying service
-  private HttpClient _client;
+  private CloseableHttpClient _client;
   // Configuration
-  private boolean _followsRedirects;
-  private String _charset;
+  //private boolean _followsRedirects;
+  //private String _charset;
   private boolean _storeCookies;
   // Statistics
   private long _downloads;
@@ -42,10 +54,13 @@ public class Downloader
    */
   public Downloader()
   {
-    _client=new HttpClient(new MultiThreadedHttpConnectionManager());
-    _client.getHttpConnectionManager().getParams().setConnectionTimeout(30000);
-    _followsRedirects=true;
-    _charset=EncodingNames.UTF_8;
+    SSLConnectionSocketFactory sslConnectionSocketFactory=new SSLConnectionSocketFactory(SSLContexts.createDefault(),new String[] {"TLSv1.2"},null,
+        SSLConnectionSocketFactory.getDefaultHostnameVerifier());
+
+    _client=HttpClientBuilder.create().setSSLSocketFactory(sslConnectionSocketFactory).build();
+
+    //_followsRedirects=true;
+    //_charset=EncodingNames.UTF_8;
     _storeCookies=false;
     _downloads=0;
     _bytes=0;
@@ -67,7 +82,7 @@ public class Downloader
    */
   public void setFollowsRedirects(boolean followsRedirects)
   {
-    _followsRedirects=followsRedirects;
+    //_followsRedirects=followsRedirects;
   }
 
   /**
@@ -76,7 +91,7 @@ public class Downloader
    */
   public void setCharset(String charset)
   {
-    _charset=charset;
+    //_charset=charset;
   }
 
   /**
@@ -90,7 +105,7 @@ public class Downloader
 
   private interface ResultGetter<T>
   {
-    public T getResult(GetMethod method) throws Exception;
+    public T getResult(HttpGet method, CloseableHttpResponse response) throws Exception;
   }
 
   private synchronized <T> T privateDowload(String url, ResultGetter<T> getter) throws DownloadException
@@ -100,17 +115,24 @@ public class Downloader
       _logger.info("Downloading from URL ["+url+"].");
     }
     T ret=null;
-    GetMethod get=new GetMethod(url);
+    HttpGet get=new HttpGet(url);
     try
     {
+      /*
       get.setFollowRedirects(_followsRedirects);
       get.getParams().setHttpElementCharset(_charset);
-      int iGetResultCode=_client.executeMethod(get);
+      */
+
+      CloseableHttpResponse response = _client.execute(get);
+      int iGetResultCode=response.getStatusLine().getStatusCode();
       if (_logger.isInfoEnabled())
       {
         _logger.info("Status code : "+iGetResultCode);
       }
-      ret=getter.getResult(get);
+      if (iGetResultCode >= 200 && iGetResultCode < 300)
+      {
+        ret=getter.getResult(get,response);
+      }
       if (_storeCookies)
       {
         catchCookies(get);
@@ -143,12 +165,21 @@ public class Downloader
   {
     ResultGetter<byte[]> getter=new ResultGetter<byte[]>()
     {
-      public byte[] getResult(GetMethod method) throws Exception
+      public byte[] getResult(HttpGet method, CloseableHttpResponse response) throws Exception
       {
-        byte[] ret=method.getResponseBody();
-        if (ret!=null)
+        byte[] ret=null;
+        try
         {
-          updateStatistics(ret.length,1);
+          HttpEntity entity=response.getEntity();
+          ret=EntityUtils.toByteArray(entity);
+          if (ret!=null)
+          {
+            updateStatistics(ret.length,1);
+          }
+        }
+        finally
+        {
+          response.close();
         }
         return ret;
       }
@@ -167,13 +198,22 @@ public class Downloader
   {
     ResultGetter<String> getter=new ResultGetter<String>()
     {
-      public String getResult(GetMethod method) throws Exception
+      public String getResult(HttpGet method, CloseableHttpResponse response) throws Exception
       {
-        String ret=method.getResponseBodyAsString();
-        if (ret!=null)
+        String ret=null;
+        try
         {
-          long length=method.getResponseContentLength();
-          updateStatistics(length,1);
+          HttpEntity entity=response.getEntity();
+          ret=EntityUtils.toString(entity);
+          if (ret!=null)
+          {
+            long length=entity.getContentLength();
+            updateStatistics(length,1);
+          }
+        }
+        finally
+        {
+          response.close();
         }
         return ret;
       }
@@ -193,19 +233,29 @@ public class Downloader
   {
     ResultGetter<Boolean> getter=new ResultGetter<Boolean>()
     {
-      public Boolean getResult(GetMethod method) throws Exception
+      public Boolean getResult(HttpGet method, CloseableHttpResponse response) throws Exception
       {
-        InputStream is=method.getResponseBodyAsStream();
-        boolean ok=FileCopy.copy(is,to);
-        if (ok)
+        boolean ok=false;
+        try
         {
-          updateStatistics(to.length(),1);
+          HttpEntity entity=response.getEntity();
+          byte[] buffer=EntityUtils.toByteArray(entity);
+          InputStream is=new ByteArrayInputStream(buffer);
+          ok=FileCopy.copy(is,to);
+          if (ok)
+          {
+            updateStatistics(to.length(),1);
+          }
+        }
+        finally
+        {
+          response.close();
         }
         return Boolean.valueOf(ok);
       }
     };
     Boolean ret=privateDowload(url,getter);
-    return ret.booleanValue();
+    return (ret!=null)?ret.booleanValue():false;
   }
 
   /**
@@ -243,20 +293,29 @@ public class Downloader
       _logger.info("Downloading URL ["+url+"] to file ["+to+"]");
     }
     boolean ret=false;
-    PostMethod post=new PostMethod(url);
+    HttpPost post=new HttpPost(url);
+    List<NameValuePair> form = new ArrayList<NameValuePair>();
     for(Map.Entry<String,String> parameter : parameters.entrySet())
     {
-      post.setParameter(parameter.getKey(),parameter.getValue());
+      form.add(new BasicNameValuePair(parameter.getKey(), parameter.getValue()));
     }
+    UrlEncodedFormEntity entity = new UrlEncodedFormEntity(form, Consts.UTF_8);
+    post.setEntity(entity);
+    //System.out.println("Executing request " + post.getRequestLine());
+
+    CloseableHttpResponse response = null;
     try
     {
       //get.setFollowRedirects(true);
-      int iGetResultCode=_client.executeMethod(post);
+      response = _client.execute(post);
+      int iGetResultCode=response.getStatusLine().getStatusCode();
       if (_logger.isInfoEnabled())
       {
         _logger.info("Status code : "+iGetResultCode);
       }
-      InputStream is=post.getResponseBodyAsStream();
+      HttpEntity resultEntity=response.getEntity();
+      byte[] buffer=EntityUtils.toByteArray(resultEntity);
+      InputStream is=new ByteArrayInputStream(buffer);
       ret=FileCopy.copy(is,to);
       _bytes+=to.length();
       _downloads++;
@@ -268,15 +327,22 @@ public class Downloader
     }
     finally
     {
-      post.releaseConnection();
+      try
+      {
+        response.close();
+      }
+      catch(IOException ioe)
+      {
+        ioe.printStackTrace();
+      }
     }
     return ret;
   }
 
-  private void catchCookies(HttpMethodBase method)
+  private void catchCookies(HttpRequestBase method)
   {
     _cookies.clear();
-    Header[] headers=method.getRequestHeaders();
+    Header[] headers=method.getAllHeaders();
     for(int i=0;i<headers.length;i++)
     {
       String name=headers[i].getName();
