@@ -19,7 +19,7 @@ public class DownloadsManagerTest extends TestCase
     DownloadsManager downloadsMgr=new DownloadsManager();
     String url="https://sourceforge.net/projects/lotrocompanion/files/1.zip/download";
     File to=new File("d:/tmp/toto1.zip");
-    DownloadTask task=downloadsMgr.newDownload(url,to);
+    DownloadTask task=downloadsMgr.newFileDownload(url,to);
     DownloadListener listener=new DownloadListener()
     {
       @Override

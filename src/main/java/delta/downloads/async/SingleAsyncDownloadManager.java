@@ -1,6 +1,5 @@
 package delta.downloads.async;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Future;
@@ -21,10 +20,10 @@ import org.apache.http.protocol.HttpContext;
 import org.apache.log4j.Logger;
 
 import delta.common.utils.NumericTools;
-import delta.common.utils.files.BinaryFileWriter;
 
 /**
- * @author dm
+ * Manager for a single download.
+ * @author DAM
  */
 public class SingleAsyncDownloadManager
 {
@@ -32,7 +31,6 @@ public class SingleAsyncDownloadManager
 
   private CloseableHttpAsyncClient _client;
   private DownloadTask _task;
-  private BinaryFileWriter _writer;
   private DownloadListener _listener;
 
   /**
@@ -61,9 +59,8 @@ public class SingleAsyncDownloadManager
    */
   public boolean start()
   {
-    File targetFile=_task.getTargetFile();
-    _writer=new BinaryFileWriter(targetFile);
-    boolean ok=_writer.start();
+    BytesReceiver receiver=_task.getReceiver();
+    boolean ok=receiver.start();
     if (!ok)
     {
       _task.setDownloadState(DownloadState.FAILED);
@@ -150,19 +147,20 @@ public class SingleAsyncDownloadManager
       LOGGER.debug("Received: "+buf.remaining());
     }
     int bytesCount=buf.remaining();
-    try
+    byte[] bytes=buf.array();
+    BytesReceiver receiver=_task.getReceiver();
+    boolean ok=receiver.handleBytes(bytes,0,bytesCount);
+    if (ok)
     {
-      _writer.getDataOutputStream().write(buf.array(),0,bytesCount);
       int doneSize=_task.getDoneSize();
       doneSize+=bytesCount;
       _task.setDoneSize(doneSize);
       invokeListener();
     }
-    catch (IOException ioe)
+    else
     {
-      LOGGER.warn("Could not write data!",ioe);
       cancel();
-      handleFailure(ioe);
+      handleFailure(null);
     }
   }
 
@@ -201,8 +199,8 @@ public class SingleAsyncDownloadManager
 
   private void handleTermination()
   {
-    _writer.terminate();
-    _writer=null;
+    BytesReceiver receiver=_task.getReceiver();
+    receiver.terminate();
   }
 
   /**

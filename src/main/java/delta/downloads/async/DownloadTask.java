@@ -1,6 +1,5 @@
 package delta.downloads.async;
 
-import java.io.File;
 import java.util.concurrent.Future;
 
 import org.apache.http.HttpResponse;
@@ -13,7 +12,7 @@ public class DownloadTask
 {
   private int _id;
   private String _url;
-  private File _targetFile;
+  private BytesReceiver _receiver;
   private Integer _expectedSize;
   private int _doneSize;
   private DownloadState _state;
@@ -23,13 +22,13 @@ public class DownloadTask
    * Constructor.
    * @param id Task ID.
    * @param url URL to get.
-   * @param targetFile File to write to.
+   * @param receiver Bytes receiver.
    */
-  public DownloadTask(int id, String url, File targetFile)
+  public DownloadTask(int id, String url, BytesReceiver receiver)
   {
     _id=id;
     _url=url;
-    _targetFile=targetFile;
+    _receiver=receiver;
     _state=DownloadState.NOT_RUNNING;
   }
 
@@ -55,9 +54,9 @@ public class DownloadTask
    * Get the file to write to.
    * @return A file.
    */
-  public File getTargetFile()
+  public BytesReceiver getReceiver()
   {
-    return _targetFile;
+    return _receiver;
   }
 
   /**
@@ -137,7 +136,7 @@ public class DownloadTask
   {
     StringBuilder sb=new StringBuilder();
     sb.append("Download from ").append(_url);
-    sb.append(" to file ").append(_targetFile);
+    sb.append(" to receiver ").append(_receiver);
     sb.append(": state=").append(_state);
     sb.append(", done ").append(_doneSize);
     sb.append("/");

@@ -1,6 +1,7 @@
 package delta.downloads.async;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,6 +11,7 @@ import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClients;
 import org.apache.http.nio.conn.ssl.SSLIOSessionStrategy;
 import org.apache.http.ssl.SSLContexts;
+import org.apache.log4j.Logger;
 
 /**
  * Synchronous/Asynchronous downloads manager.
@@ -17,6 +19,8 @@ import org.apache.http.ssl.SSLContexts;
  */
 public class DownloadsManager
 {
+  private static final Logger LOGGER=Logger.getLogger(DownloadsManager.class);
+
   private CloseableHttpAsyncClient _client;
   private Map<Integer,SingleAsyncDownloadManager> _tasks;
   private int _nextID;
@@ -40,7 +44,7 @@ public class DownloadsManager
    */
   public DownloadTask syncDownload(String url, File to, DownloadListener listener)
   {
-    DownloadTask task=newDownload(url,to);
+    DownloadTask task=newFileDownload(url,to);
     boolean startOK=startDownload(task,listener);
     if (startOK)
     {
@@ -50,14 +54,53 @@ public class DownloadsManager
   }
 
   /**
-   * Build a new download task.
+   * Synchronous download of a buffer.
+   * @param url URL to get.
+   * @param listener Download listener (optional).
+   * @return the result buffer.
+   */
+  public byte[] syncDownloadBuffer(String url, DownloadListener listener)
+  {
+    DownloadTask task=newBufferDownload(url);
+    boolean startOK=startDownload(task,listener);
+    if (startOK)
+    {
+      waitForTaskTermination(task);
+      if (task.getDownloadState()==DownloadState.OK)
+      {
+        BufferReceiver receiver=(BufferReceiver)task.getReceiver();
+        return receiver.getBytes();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Build a new download task (to file).
    * @param url URL to get.
    * @param to File to write to.
    * @return A new download task.
    */
-  public DownloadTask newDownload(String url, File to)
+  public DownloadTask newFileDownload(String url, File to)
   {
-    DownloadTask task=new DownloadTask(_nextID,url,to);
+    FileReceiver receiver=new FileReceiver(to);
+    return newTask(url,receiver);
+  }
+
+  /**
+   * Build a new download task (to buffer).
+   * @param url URL to get.
+   * @return A new download task.
+   */
+  public DownloadTask newBufferDownload(String url)
+  {
+    BufferReceiver receiver=new BufferReceiver();
+    return newTask(url,receiver);
+  }
+
+  private DownloadTask newTask(String url, BytesReceiver receiver)
+  {
+    DownloadTask task=new DownloadTask(_nextID,url,receiver);
     SingleAsyncDownloadManager downloadManager=new SingleAsyncDownloadManager(_client,task);
     _tasks.put(Integer.valueOf(_nextID),downloadManager);
     _nextID++;
@@ -122,5 +165,24 @@ public class DownloadsManager
     CloseableHttpAsyncClient httpclient=HttpAsyncClients.custom().setSSLStrategy(sslSessionStrategy).build();
     httpclient.start();
     return httpclient;
+  }
+
+  /**
+   * Release all managed resources.
+   */
+  public void dispose()
+  {
+    if (_client!=null)
+    {
+      try
+      {
+        _client.close();
+      }
+      catch(IOException ioe)
+      {
+        LOGGER.warn("Caught exception when closing the HTTP client!", ioe);
+      }
+      _client=null;
+    }
   }
 }
