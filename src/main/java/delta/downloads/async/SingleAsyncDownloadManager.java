@@ -72,11 +72,11 @@ public class SingleAsyncDownloadManager
     final HttpGet get=new HttpGet(url);
     HttpAsyncRequestProducer producer=HttpAsyncMethods.create(get);
     AsyncByteConsumer<HttpResponse> consumer=buildConsumer();
-    _latch = new CountDownLatch(1);
+    _latch=new CountDownLatch(1);
     FutureCallback<HttpResponse> callback=buildCallback();
+    _task.setDownloadState(DownloadState.RUNNING);
     Future<HttpResponse> future=_client.execute(producer,consumer,callback);
     _task.setFuture(future);
-    _task.setDownloadState(DownloadState.RUNNING);
     return true;
   }
 
@@ -204,6 +204,7 @@ public class SingleAsyncDownloadManager
     BytesReceiver receiver=_task.getReceiver();
     receiver.terminate();
     invokeListener();
+    LOGGER.debug("Releasing latch!");
     _latch.countDown();
   }
 
@@ -226,6 +227,7 @@ public class SingleAsyncDownloadManager
   {
     if (_latch==null)
     {
+      LOGGER.warn("No latch!");
       return;
     }
     try

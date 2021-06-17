@@ -66,11 +66,13 @@ public class DownloadsManager
     if (startOK)
     {
       waitForTaskTermination(task);
-      if (task.getDownloadState()==DownloadState.OK)
+      DownloadState state=task.getDownloadState();
+      if (state==DownloadState.OK)
       {
         BufferReceiver receiver=(BufferReceiver)task.getReceiver();
         return receiver.getBytes();
       }
+      LOGGER.warn("Unexpected download state: "+state);
     }
     return null;
   }
