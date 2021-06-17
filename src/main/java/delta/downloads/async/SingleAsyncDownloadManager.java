@@ -2,6 +2,7 @@ package delta.downloads.async;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 
 import org.apache.http.Header;
@@ -32,7 +33,8 @@ public class SingleAsyncDownloadManager
   private CloseableHttpAsyncClient _client;
   private DownloadTask _task;
   private DownloadListener _listener;
-
+  private CountDownLatch _latch;
+  
   /**
    * Constructor.
    * @param client Underlying HTTP client.
@@ -70,6 +72,7 @@ public class SingleAsyncDownloadManager
     final HttpGet get=new HttpGet(url);
     HttpAsyncRequestProducer producer=HttpAsyncMethods.create(get);
     AsyncByteConsumer<HttpResponse> consumer=buildConsumer();
+    _latch = new CountDownLatch(1);
     FutureCallback<HttpResponse> callback=buildCallback();
     Future<HttpResponse> future=_client.execute(producer,consumer,callback);
     _task.setFuture(future);
@@ -180,27 +183,28 @@ public class SingleAsyncDownloadManager
       _task.setDownloadState(DownloadState.FAILED);
     }
     handleTermination();
-    invokeListener();
   }
 
   private void handleFailure(Exception e)
   {
+    LOGGER.warn("Failure received for: "+_task);
     _task.setDownloadState(DownloadState.FAILED);
     handleTermination();
-    invokeListener();
   }
 
   private void handleCancellation()
   {
+    LOGGER.warn("Cancellation received for: "+_task);
     _task.setDownloadState(DownloadState.CANCELLED);
     handleTermination();
-    invokeListener();
   }
 
   private void handleTermination()
   {
     BytesReceiver receiver=_task.getReceiver();
     receiver.terminate();
+    invokeListener();
+    _latch.countDown();
   }
 
   /**
@@ -220,23 +224,17 @@ public class SingleAsyncDownloadManager
    */
   public void waitForDownloadTermination()
   {
-    Future<HttpResponse> future=_task.getFuture();
-    if (future==null)
+    if (_latch==null)
     {
       return;
     }
-    HttpResponse response=null;
     try
     {
-      response=future.get();
+      _latch.await();
     }
     catch (Exception e)
     {
-      LOGGER.error("Caught exception in Future.get!",e);
-    }
-    if (response!=null)
-    {
-      LOGGER.debug("Got response: "+response);
+      LOGGER.error("Caught exception in _latch.await!",e);
     }
   }
 
