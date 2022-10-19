@@ -12,15 +12,22 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="con" path="org.eclipse.m2e.MAVEN2_CLASSPATH_CONTAINER">
-		<attributes>
-			<attribute name="maven.pomderived" value="true"/>
-		</attributes>
-	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
 		<attributes>
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.m2e.MAVEN2_CLASSPATH_CONTAINER">
+		<attributes>
+			<attribute name="maven.pomderived" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/lib/log4j-over-slf4j-1.7.33.jar"/>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/lib/logback-classic-1.2.10.jar"/>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/lib/logback-core-1.2.10.jar"/>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/lib/slf4j-api-1.7.33.jar"/>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/lib/delta-common-1.7.1.jar"/>
+	<classpathentry kind="lib" path="C:/Users/SIMON_2016/LotRO Companion/app/kickstarter/delta-common-1.6.4.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/3"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
