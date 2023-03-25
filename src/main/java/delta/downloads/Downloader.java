@@ -27,7 +27,6 @@ import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
 import delta.common.utils.files.FileCopy;
-import delta.downloads.utils.DownloadsLoggers;
 
 /**
  * A download service.
@@ -35,7 +34,7 @@ import delta.downloads.utils.DownloadsLoggers;
  */
 public class Downloader
 {
-  private static final Logger _logger=DownloadsLoggers.getDownloadsLogger();
+  private static final Logger LOGGER=Logger.getLogger(Downloader.class);
 
   // Underlying service
   private CloseableHttpClient _client;
@@ -110,9 +109,9 @@ public class Downloader
 
   private synchronized <T> T privateDowload(String url, ResultGetter<T> getter) throws DownloadException
   {
-    if (_logger.isInfoEnabled())
+    if (LOGGER.isInfoEnabled())
     {
-      _logger.info("Downloading from URL ["+url+"].");
+      LOGGER.info("Downloading from URL ["+url+"].");
     }
     T ret=null;
     HttpGet get=new HttpGet(url);
@@ -125,9 +124,9 @@ public class Downloader
 
       CloseableHttpResponse response = _client.execute(get);
       int iGetResultCode=response.getStatusLine().getStatusCode();
-      if (_logger.isInfoEnabled())
+      if (LOGGER.isInfoEnabled())
       {
-        _logger.info("Status code : "+iGetResultCode);
+        LOGGER.info("Status code : "+iGetResultCode);
       }
       if (iGetResultCode >= 200 && iGetResultCode < 300)
       {
@@ -274,7 +273,7 @@ public class Downloader
     }
     catch(DownloadException e)
     {
-      _logger.error("Download error",e);
+      LOGGER.error("Download error",e);
     }
     return ret;
   }
@@ -288,9 +287,9 @@ public class Downloader
    */
   public boolean downloadPageAsPost(String url, File to, Map<String,String> parameters)
   {
-    if (_logger.isInfoEnabled())
+    if (LOGGER.isInfoEnabled())
     {
-      _logger.info("Downloading URL ["+url+"] to file ["+to+"]");
+      LOGGER.info("Downloading URL ["+url+"] to file ["+to+"]");
     }
     boolean ret=false;
     HttpPost post=new HttpPost(url);
@@ -309,9 +308,9 @@ public class Downloader
       //get.setFollowRedirects(true);
       response = _client.execute(post);
       int iGetResultCode=response.getStatusLine().getStatusCode();
-      if (_logger.isInfoEnabled())
+      if (LOGGER.isInfoEnabled())
       {
-        _logger.info("Status code : "+iGetResultCode);
+        LOGGER.info("Status code : "+iGetResultCode);
       }
       HttpEntity resultEntity=response.getEntity();
       byte[] buffer=EntityUtils.toByteArray(resultEntity);
