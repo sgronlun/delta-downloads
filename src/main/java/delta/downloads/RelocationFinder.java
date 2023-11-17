@@ -5,15 +5,13 @@ import java.net.URL;
 
 import org.apache.log4j.Logger;
 
-import delta.downloads.utils.DownloadsLoggers;
-
 /**
  * Finds relocations.
  * @author DAM
  */
 public class RelocationFinder
 {
-  private static final Logger _logger=DownloadsLoggers.getDownloadsLogger();
+  private static final Logger LOGGER=Logger.getLogger(RelocationFinder.class);
 
   /**
    * Finds relocation for the given URL, if any.
@@ -44,7 +42,7 @@ public class RelocationFinder
     }
     catch(Exception e)
     {
-      _logger.error("",e);
+      LOGGER.error("",e);
     }
     finally
     {
